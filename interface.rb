@@ -1,18 +1,31 @@
 # Provides simple interface like behaviour
 # for ruby classes and modules
 module Interface
-  @@all_interfaces = []
+  @all_interfaces = []
 
-  def implements(const)
-    raise_invalid_interface(const) unless @@all_interfaces.include?(const)
-
-    yield self
-
-    enforce_methods_implemented(implementor: self, interface: const)
+  def self.all_interfaces
+    @all_interfaces
   end
 
-  def interface(bool)
-    @@all_interfaces << self if bool == :true
+  def implements(const)
+    raise_not_interface(const) unless interface?(const)
+
+    TracePoint.trace(:end) do |trace_point|
+      enforce_methods_implemented(
+        implementor: trace_point.self,
+        interface: const
+      )
+
+      trace_point.disable
+    end
+  end
+
+  def interface!
+    Interface.all_interfaces << self unless interface?(self)
+  end
+
+  def interface?(const)
+    Interface.all_interfaces.include?(const)
   end
 
   private
@@ -27,21 +40,21 @@ module Interface
     )
 
     unless missing_methods.empty?
-      raise_not_implemented_error(implementor, interface, missing_methods)
+      raise_missing_methods(implementor, interface, missing_methods)
     end
   end
 
-  def raise_invalid_interface(const)
+  def raise_not_interface(const)
     raise ArgumentError, "#{const.class} #{const}" \
-      " is not an interface. " \
-      "You can implement interface like behaviour by adding 'interface :true'" \
-      " to your class or module."
+      ' is not an interface. ' \
+      "You can implement interface like behaviour by adding 'interface!'" \
+      ' to your class or module.'
   end
 
-  def raise_not_implemented_error(implementor, interface, missing_methods)
+  def raise_missing_methods(implementor, interface, missing_methods)
     raise NotImplementedError, "Methods: #{missing_methods} " \
       "from #{interface.class.to_s.downcase} #{interface} " \
-      "not implemented in " \
+      'not implemented in ' \
       "#{implementor.class.to_s.downcase} #{implementor}."
   end
 
@@ -71,11 +84,6 @@ module Interface
       implementor_methods.include?(method)
     end
   end
-end
-
-# include in Class
-class Class
-  include Interface
 end
 
 # include in Module
